@@ -2,7 +2,7 @@ use bevy::{
     core_pipeline::Skybox,
     pbr::{DirectionalLightShadowMap, ShadowFilteringMethod},
     prelude::*,
-    render::render_resource::{TextureViewDescriptor, TextureViewDimension},
+    render::render_resource::{TextureFormat, TextureViewDescriptor, TextureViewDimension},
 };
 
 use smooth_bevy_cameras::{
@@ -12,7 +12,6 @@ use smooth_bevy_cameras::{
 
 use std::f32::consts::PI;
 
-const DAY: bool = true;
 const DRAW_CLOUDS: bool = true;
 const DEBUG: bool = false;
 
@@ -34,6 +33,12 @@ struct Cubemap {
     image_handle: Handle<Image>,
 }
 
+#[derive(Resource, Clone)]
+struct NormalMap {
+    is_loaded: bool,
+    image_handle: Handle<Image>,
+}
+
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -44,10 +49,8 @@ fn setup(
         asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_day.jpg");
     let earth_night =
         asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_night.jpg");
-    let earth_normal =
-        asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_normal.png");
     let earth_spec =
-        asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_specular_inv.png");
+        asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_specular.png");
     let earth_clouds =
         asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_clouds.png");
 
@@ -57,6 +60,14 @@ fn setup(
         image_handle: skybox.clone(),
     };
     commands.insert_resource(cubemap.clone());
+
+    let earth_normal =
+        asset_server.load("/Users/rikshot/Projects/rsglobe/assets/textures/earth_normal.png");
+    let normalmap = NormalMap {
+        is_loaded: false,
+        image_handle: earth_normal.clone(),
+    };
+    commands.insert_resource(normalmap);
 
     if DEBUG {
         commands.spawn((
@@ -88,19 +99,24 @@ fn setup(
         ));
     }
 
-    let globe_mesh = Sphere::new(1.0).mesh().ico(64).unwrap();
+    let globe_mesh = Sphere::new(1.0)
+        .mesh()
+        .uv(512, 512)
+        .with_generated_tangents()
+        .unwrap();
 
     commands.spawn((
         Transform::from_rotation(Quat::from_rotation_z(PI)),
         Mesh3d(meshes.add(globe_mesh)),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color_texture: Some(if DAY { earth_day } else { earth_night }),
-            normal_map_texture: Some(earth_normal),
+            base_color_texture: Some(earth_day),
+            emissive: LinearRgba::rgb(0.25, 0.25, 0.25),
+            emissive_texture: Some(earth_night),
+            normal_map_texture: Some(earth_normal.clone()),
             occlusion_texture: Some(earth_clouds.clone()),
-            metallic: 1.0,
-            perceptual_roughness: 1.0,
+            perceptual_roughness: 0.75,
             metallic_roughness_texture: Some(earth_spec),
-            alpha_mode: AlphaMode::Blend,
+            reflectance: 0.25,
             ..default()
         })),
     ));
@@ -108,14 +124,20 @@ fn setup(
     if DRAW_CLOUDS {
         commands.spawn((
             Transform::from_rotation(Quat::from_rotation_z(PI)),
-            Mesh3d(meshes.add(Sphere::new(1.01).mesh().ico(64).unwrap())),
+            Mesh3d(
+                meshes.add(
+                    Sphere::new(1.01)
+                        .mesh()
+                        .uv(512, 512)
+                        .with_generated_tangents()
+                        .unwrap(),
+                ),
+            ),
             MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::WHITE.with_alpha(0.8),
                 base_color_texture: Some(earth_clouds.clone()),
                 alpha_mode: AlphaMode::AlphaToCoverage,
-                diffuse_transmission: 0.25,
-                specular_transmission: 0.25,
-                thickness: 0.01,
-                ior: 1.02,
+                double_sided: true,
                 ..default()
             })),
         ));
@@ -168,6 +190,7 @@ fn asset_loaded(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     mut cubemap: ResMut<Cubemap>,
+    mut normalmap: ResMut<NormalMap>,
     mut skyboxes: Query<&mut Skybox>,
 ) {
     if !cubemap.is_loaded && asset_server.load_state(&cubemap.image_handle).is_loaded() {
@@ -186,12 +209,21 @@ fn asset_loaded(
 
         cubemap.is_loaded = true;
     }
+    if !normalmap.is_loaded && asset_server.load_state(&normalmap.image_handle).is_loaded() {
+        let image = images.get_mut(&normalmap.image_handle).unwrap();
+        image.texture_descriptor.format = TextureFormat::Rgba8Unorm;
+        normalmap.is_loaded = true;
+    }
 }
 
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(DirectionalLightShadowMap { size: 32768 })
+        .insert_resource(DirectionalLightShadowMap { size: 1024 * 128 })
+        .insert_resource(AmbientLight {
+            color: Color::BLACK,
+            brightness: 0.1,
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins(LookTransformPlugin)
         .add_plugins(OrbitCameraPlugin::default())
