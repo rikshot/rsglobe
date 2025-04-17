@@ -4,10 +4,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{TextureFormat, TextureViewDescriptor, TextureViewDimension},
 };
-use smooth_bevy_cameras::{
-    LookTransformPlugin,
-    controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
-};
+use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
 use std::f32::consts::PI;
 
@@ -177,12 +174,10 @@ pub fn setup(
             brightness: 1000.0,
             ..default()
         })
-        .insert(OrbitCameraBundle::new(
-            OrbitCameraController::default(),
-            Vec3::new(-2.0, 5.0, 5.0),
-            Vec3::new(0., 0., 0.),
-            Vec3::Y,
-        ));
+        .insert(PanOrbitCamera {
+            radius: Some(5.0),
+            ..default()
+        });
 }
 
 pub fn asset_loaded(
@@ -225,8 +220,7 @@ fn main() {
             brightness: 0.1,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(LookTransformPlugin)
-        .add_plugins(OrbitCameraPlugin::default())
+        .add_plugins(PanOrbitCameraPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, asset_loaded)
         .run();

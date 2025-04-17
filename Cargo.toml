@@ -16,7 +16,7 @@ bevy = { version = "*", default-features = false, features = [
     "png",
     "jpeg",
 ] }
-smooth-bevy-cameras = "*"
+bevy_panorbit_camera = "*"
 
 [profile.dev]
 opt-level = 1
